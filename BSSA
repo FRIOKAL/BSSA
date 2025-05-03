@@ -1,0 +1,15 @@
+                -- Restart the loop when end of data is reached
+                index = 1
+            end
+        end
+    end
+end
+
+recordButton.MouseButton1Click:Connect(function()
+    toggleRecording()
+    if recording then spawn(recordMovement) end
+end)
+
+replayButton.MouseButton1Click:Connect(function()
+    replayMovement()
+end)
