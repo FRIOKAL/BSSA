@@ -1,3 +1,141 @@
+local player = game.Players.LocalPlayer
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local makeHoneyEvent = replicatedStorage:WaitForChild("Remotes"):WaitForChild("MakeHoney")
+local userInputService = game:GetService("UserInputService")
+local runService = game:GetService("RunService")
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "BeeControlGUI"
+
+-- Auto Honey Convert Button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 150, 0, 40)
+toggleButton.Position = UDim2.new(0, 20, 0, 100)
+toggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.TextSize = 20
+toggleButton.Text = "Auto Convert: OFF"
+toggleButton.Parent = screenGui
+toggleButton.Active = true
+toggleButton.Draggable = false
+
+-- Record/Replay Frame
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 200, 0, 100)
+frame.Position = UDim2.new(0, 200, 0, 10)
+frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+frame.BackgroundTransparency = 0.5
+frame.Parent = screenGui
+
+local recordButton = Instance.new("TextButton")
+recordButton.Size = UDim2.new(0, 180, 0, 40)
+recordButton.Position = UDim2.new(0, 10, 0, 10)
+recordButton.Text = "Start Recording"
+recordButton.Parent = frame
+
+local replayButton = Instance.new("TextButton")
+replayButton.Size = UDim2.new(0, 180, 0, 40)
+replayButton.Position = UDim2.new(0, 10, 0, 50)
+replayButton.Text = "Replay Movement"
+replayButton.Parent = frame
+
+-- Dragging setup for Auto Convert button
+local dragging, dragInput, dragStart, startPos = false
+local function update(input)
+    if dragging then
+        local delta = input.Position - dragStart
+        toggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end
+
+toggleButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = toggleButton.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+toggleButton.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+userInputService.InputChanged:Connect(function(input)
+    if input == dragInput then
+        update(input)
+    end
+end)
+
+-- Auto Convert Logic
+local autoConvert = false
+task.spawn(function()
+    while true do
+        if autoConvert then
+            makeHoneyEvent:FireServer(true)
+        end
+        wait(1)
+    end
+end)
+
+toggleButton.MouseButton1Click:Connect(function()
+    autoConvert = not autoConvert
+    toggleButton.Text = "Auto Convert: " .. (autoConvert and "ON" or "OFF")
+    toggleButton.BackgroundColor3 = autoConvert and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(40, 40, 40)
+end)
+
+-- Token Magnet
+runService.Heartbeat:Connect(function()
+    for _, token in pairs(workspace.Debris.Tokens:GetChildren()) do
+        if token:FindFirstChild("Token") and not token.Collecting.Value and (token.Position - humanoidRootPart.Position).Magnitude < 30 then
+            token.Position = humanoidRootPart.Position
+        end
+    end
+end)
+
+-- Movement Recorder / Replayer
+local recording = false
+local movementData = {}
+
+local function toggleRecording()
+    recording = not recording
+    recordButton.Text = recording and "Stop Recording" or "Start Recording"
+    if recording then movementData = {} end
+end
+
+local function recordMovement()
+    while recording do
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            table.insert(movementData, {position = rootPart.Position, orientation = rootPart.Orientation})
+        end
+        wait(0.1)
+    end
+end
+
+local function replayMovement()
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if rootPart and #movementData > 0 then
+        local index = 1
+        while true do  -- Loop replay
+            local data = movementData[index]
+            if data then
+                rootPart.CFrame = CFrame.new(data.position) * CFrame.Angles(
+                    math.rad(data.orientation.X), math.rad(data.orientation.Y), math.rad(data.orientation.Z))
+                wait(0.1)
+                index = index + 1
+            else
                 -- Restart the loop when end of data is reached
                 index = 1
             end
